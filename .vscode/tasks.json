@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build WinTailF",
+            "command": "dotnet build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "group": "build",
+            "type": "shell",
+            "problemMatcher": [
+                "$msCompile"
+            ]
+        }
+    ]
+}
