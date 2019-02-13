@@ -3,43 +3,62 @@ module Actors
 open System
 open Akkling
 
-type Command =
-    | Proceed
-    | Content of String
-    | Exit
+type ConsoleReaderMessage =
+    | ReadInput
 
-let (|Exit|Content|) (input: String) =
-    if input.ToLower() = "exit" then Exit else Content input
+type InputValidatorMessage =
+    | ValidateInput of String
 
-let (|Empty|Even|Odd|) (content: String) =
+type ConsoleWriterMessage =
+    | WriteInfo of String
+    | WriteError of String
+
+let (|IsExit|IsContent|) (input: String) =
+    if input.ToLower() = "exit" then IsExit else IsContent
+
+let (|IsValid|IsInvalid|) (content: String) =
     match content.Length with
-    | 0 -> Empty
-    | n when n % 2 = 0 -> Even 
-    | _ -> Odd
-
-let printInColor (color: ConsoleColor) (content: String) =
-    Console.ForegroundColor <- color
-    Console.WriteLine(content)
-    Console.ResetColor()
+    | n when n > 0 && n % 2 = 0 -> IsValid
+    | _ -> IsInvalid
 
 let consoleWriter =
-    fun (context: Actor<String>) (message: String) ->
-    match message with
-    | Empty -> printInColor ConsoleColor.Yellow "You did not enter any characters"
-    | Even -> printInColor ConsoleColor.Green "You entered an even number of characters"
-    | Odd -> printInColor ConsoleColor.Red "You entered an odd number of characters"
-    
-    ignored ()
+    fun (context: Actor<ConsoleWriterMessage>) (message: ConsoleWriterMessage) ->
+        match message with
+        | WriteInfo text -> 
+            Console.ForegroundColor <- ConsoleColor.Green 
+            Console.WriteLine text
+        | WriteError text ->
+            Console.ForegroundColor <- ConsoleColor.Red 
+            Console.WriteLine text
 
-let consoleReader (consoleWriter: IActorRef<String>) =
-    fun (context: Actor<Command>) (message: Command) ->
-    let input = Console.ReadLine()
+        Console.ResetColor()
+        
+        ignored ()
 
-    match input with
-    | Exit -> 
-        context.System.Terminate() |> ignore
-    | Content c ->
-        consoleWriter <! input
-        context.Self <! Proceed
+let inputValidator (consoleWriter: IActorRef<ConsoleWriterMessage>) =
+    fun (context: Actor<InputValidatorMessage>) (message: InputValidatorMessage) ->
+        match message with
+        | ValidateInput input ->
+            match input with
+            | IsValid -> 
+                consoleWriter <! WriteInfo "You entered a valid number of characters"
+            | IsInvalid ->
+                consoleWriter <! WriteError "You entered an invalid number of characters"
+            
+            context.Sender() <! ReadInput
 
-    ignored ()
+        ignored()
+
+let consoleReader (inputValidator: IActorRef<InputValidatorMessage>) =
+    fun (context: Actor<ConsoleReaderMessage>) (message: ConsoleReaderMessage) ->
+        match message with
+        | ReadInput ->
+            let input = Console.ReadLine()
+
+            match input with
+            | IsExit -> 
+                context.System.Terminate() |> ignore
+            | IsContent ->
+                inputValidator <! ValidateInput input
+
+        ignored ()

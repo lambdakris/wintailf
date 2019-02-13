@@ -29,15 +29,21 @@ let main argv =
         |> props 
         |> spawn winTailSystem "consoleWriter"
 
+    let inputValidatorRef =
+        inputValidator consoleWriterRef
+        |> actorOf2
+        |> props
+        |> spawn winTailSystem "inputValidator"    
+
     let consoleReaderRef = 
-        consoleReader consoleWriterRef 
+        consoleReader inputValidatorRef
         |> actorOf2 
         |> props 
         |> spawn winTailSystem "consoleReader"
 
     printInstructions() 
 
-    consoleReaderRef <! Proceed
+    consoleReaderRef <! ReadInput
 
     winTailSystem.WhenTerminated.Wait()    
         
