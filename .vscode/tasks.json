@@ -2,15 +2,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build WinTailF",
+            "label": "Build WinTailF Project",
+            "type": "shell",
+            "group": "build",
             "command": "dotnet build",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",
                 "clear": true
             },
-            "group": "build",
-            "type": "shell",
             "problemMatcher": [
                 "$msCompile"
             ]

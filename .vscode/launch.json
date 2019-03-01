@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug WinTailF",
+            "name": "Debug WinTailF Project",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "Build WinTailF",
+            "preLaunchTask": "Build WinTailF Project",
             "program": "${workspaceFolder}/bin/Debug/netcoreapp2.2/wintailf.dll",
             "console": "externalTerminal"
         }

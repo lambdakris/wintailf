@@ -2,6 +2,7 @@
 
 open System
 open Akkling
+open Akka.Actor
 open Actors
 
 let printInstructions () =
@@ -22,28 +23,42 @@ let printInstructions () =
 let main argv =
     let winTailConfig = Configuration.defaultConfig()
     use winTailSystem = System.create "WinTailSystem" winTailConfig
-    
+
     let consoleWriterRef = 
-        consoleWriter
+        Actors.consoleWriter
         |> actorOf2 
         |> props 
-        |> spawn winTailSystem "consoleWriter"
+        |> spawn winTailSystem "ConsoleWriter"
+
+    let tailCoordinatorRef = 
+        let actor = actorOf2 Actors.tailCoordinator
+        let super = 
+            Strategy.OneForOne(
+                fun ex ->
+                    match ex with
+                    | :? NotSupportedException -> Directive.Stop
+                    | _ -> Directive.Resume
+                , 3
+                , TimeSpan.FromSeconds(30.0)
+            )
+        let props = { props actor with SupervisionStrategy = Some super }
+        spawn winTailSystem "TailCoordinator" props
 
     let inputValidatorRef =
-        inputValidator consoleWriterRef
+        Actors.inputValidator consoleWriterRef tailCoordinatorRef
         |> actorOf2
         |> props
-        |> spawn winTailSystem "inputValidator"    
+        |> spawn winTailSystem "InputValidator"    
 
     let consoleReaderRef = 
-        consoleReader inputValidatorRef
+        Actors.consoleReader inputValidatorRef
         |> actorOf2 
         |> props 
-        |> spawn winTailSystem "consoleReader"
+        |> spawn winTailSystem "ConsoleReader"
 
     printInstructions() 
 
-    consoleReaderRef <! ReadInput
+    consoleReaderRef <! Messages.ReadInput
 
     winTailSystem.WhenTerminated.Wait()    
         
