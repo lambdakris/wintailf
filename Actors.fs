@@ -16,10 +16,13 @@ module Helpers =
     let readLine () =
         Console.ReadLine()
 
-    let writeLineInColor (content: String) (color: ConsoleColor) =
+    let writeLine (text: String) =
+        Console.WriteLine(text)
+
+    let writeLineInColor (text: String) (color: ConsoleColor) =
         Console.BackgroundColor <- color
-        Console.WriteLine content
-        Console.ResetColor ()
+        Console.WriteLine(text)
+        Console.ResetColor()
 
 
 module Messages =
@@ -56,33 +59,35 @@ module Actors =
             
             ignored ()
 
-    let tailOperator (path: String) (consoleWriter: IActorRef<ConsoleWriterMessage>) (context: Actor<TailOperatorMessage>) =
+    let tailOperator (path: String) (consoleWriter: IActorRef<ConsoleWriterMessage>) (context: Actor<TailOperatorMessage>) =  
         let stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
         let reader = new StreamReader(stream, Text.Encoding.UTF8)
         let watcher = new FileSystemWatcher( 
                           Path = Path.GetDirectoryName path, 
                           Filter = Path.GetFileName path, 
                           NotifyFilter = (NotifyFilters.FileName ||| NotifyFilters.LastWrite))
-
-        context.Self <! TailInit
-
         watcher.Error
         |> Event.map (fun ev -> ev.GetException())
         |> Event.add (fun ex -> context.Self <! TailError ex)
         watcher.Changed
         |> Event.add (fun ev -> context.Self <! TailChange)
+
+        context.Self <! TailInit
+
         watcher.EnableRaisingEvents <- true
 
-        fun (message: TailOperatorMessage) ->
+        let rec loop () = actor {
+            let! message = context.Receive()
+
             match message with
             | TailInit ->
                 let initialText = reader.ReadToEnd()
-                consoleWriter <! WriteInfo initialText
+                consoleWriter <! WriteInfo(sprintf "Initial file contents:\n%s" initialText)
             | TailError ex ->
-                consoleWriter <! WriteError ex.Message
+                consoleWriter <! WriteError(sprintf "Encountered error:\n%s" ex.Message)
             | TailChange ->
                 let changeText = reader.ReadToEnd()
-                consoleWriter <! WriteInfo changeText
+                consoleWriter <! WriteInfo(sprintf "Change in file contents:\n%s" changeText)
             | LifecycleEvent life ->
                 match life with
                 | PostStop -> 
@@ -91,15 +96,17 @@ module Actors =
                     stream.Dispose()
                 | _ ->
                     ()
-
-            ignored()
+            return! loop()
+        }
+        loop()
 
     let tailCoordinator (context: Actor<TailCoordinatorMessage>) =
         fun (message: TailCoordinatorMessage) ->
             match message with
             | StartTail (file, writer) ->                
-                tailOperator file writer
-                |> actorOf2 
+                let actor = tailOperator file writer
+
+                actor
                 |> props
                 |> spawn context "TailOperator"
                 |> ignore
@@ -112,10 +119,10 @@ module Actors =
             | ValidateInput input ->
                 match input with
                 | IsValidPath -> 
-                    consoleWriter <! WriteInfo(sprintf "\"%s\" is a valid file path" input)
+                    consoleWriter <! WriteInfo(sprintf "\"%s\" is a valid file path\n" input)
                     tailCoordinator <! StartTail(input, consoleWriter)
                 | IsInvalidPath ->
-                    consoleWriter <! WriteError(sprintf "\"%s\" is not a valid file path" input)
+                    consoleWriter <! WriteError(sprintf "\"%s\" is not a valid file path\n" input)
                 
             context.Sender() <! ReadInput
 
@@ -125,6 +132,8 @@ module Actors =
         fun (message: ConsoleReaderMessage) ->
             match message with
             | ReadInput ->
+                writeLine "Enter the path to a file to begin tailing:"
+
                 let input = readLine()
 
                 match input with
