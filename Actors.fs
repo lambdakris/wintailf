@@ -49,17 +49,18 @@ module Actors =
     open Helpers
     open Messages
 
-    let consoleWriter (context: Actor<ConsoleWriterMessage>) =
-        fun (message: ConsoleWriterMessage) ->
-            match message with
-            | WriteInfo text -> 
-                writeLineInColor text ConsoleColor.Green
-            | WriteError text ->
-                writeLineInColor text ConsoleColor.Red
-            
-            ignored ()
+    let consoleWriter (context: Actor<_>) (message) =
+        match message with
+        | WriteInfo text -> 
+            writeLineInColor text ConsoleColor.Green
+        | WriteError text ->
+            writeLineInColor text ConsoleColor.Red
+        
+        writeLine String.Empty
 
-    let tailOperator (path: String) (consoleWriter: IActorRef<ConsoleWriterMessage>) (context: Actor<TailOperatorMessage>) =  
+        ignored ()
+
+    let tailOperator (path: String) (consoleWriter: IActorRef<ConsoleWriterMessage>) (context: Actor<_>) =  
         let stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
         let reader = new StreamReader(stream, Text.Encoding.UTF8)
         let watcher = new FileSystemWatcher( 
@@ -81,13 +82,14 @@ module Actors =
 
             match message with
             | TailInit ->
-                let initialText = reader.ReadToEnd()
-                consoleWriter <! WriteInfo(sprintf "Initial file contents:\n%s" initialText)
+                let initContent = reader.ReadToEnd()
+                consoleWriter <! WriteInfo(sprintf "INIT CONTENT:\n%s" initContent)
             | TailError ex ->
-                consoleWriter <! WriteError(sprintf "Encountered error:\n%s" ex.Message)
+                let errorMessage = ex.Message
+                consoleWriter <! WriteError(sprintf "ERROR MESSAGE:\n%s" errorMessage)
             | TailChange ->
-                let changeText = reader.ReadToEnd()
-                consoleWriter <! WriteInfo(sprintf "Change in file contents:\n%s" changeText)
+                let newContent = reader.ReadToEnd()
+                consoleWriter <! WriteInfo(sprintf "NEW CONTENT:\n%s" newContent)
             | LifecycleEvent life ->
                 match life with
                 | PostStop -> 
@@ -100,46 +102,42 @@ module Actors =
         }
         loop()
 
-    let tailCoordinator (context: Actor<TailCoordinatorMessage>) =
-        fun (message: TailCoordinatorMessage) ->
-            match message with
-            | StartTail (file, writer) ->                
-                let actor = tailOperator file writer
+    let tailCoordinator (context: Actor<_>) (message) =
+        match message with
+        | StartTail (file, writer) ->
+            let actor = tailOperator file writer
 
-                actor
-                |> props
-                |> spawn context "TailOperator"
-                |> ignore
+            actor
+            |> props
+            |> spawn context "TailOperator"
+            |> ignore
 
-            ignored()
+        ignored()
 
-    let inputValidator (consoleWriter: IActorRef<ConsoleWriterMessage>) (tailCoordinator: IActorRef<TailCoordinatorMessage>) (context: Actor<InputValidatorMessage>) =
-        fun (message: InputValidatorMessage) ->
-            match message with
-            | ValidateInput input ->
-                match input with
-                | IsValidPath -> 
-                    consoleWriter <! WriteInfo(sprintf "\"%s\" is a valid file path\n" input)
-                    tailCoordinator <! StartTail(input, consoleWriter)
-                | IsInvalidPath ->
-                    consoleWriter <! WriteError(sprintf "\"%s\" is not a valid file path\n" input)
-                
-            context.Sender() <! ReadInput
+    let inputValidator (consoleWriter: IActorRef<ConsoleWriterMessage>) (tailCoordinator: IActorRef<TailCoordinatorMessage>) (context: Actor<_>) (message) =
+        match message with
+        | ValidateInput input ->
+            match input with
+            | IsValidPath -> 
+                consoleWriter <! WriteInfo(sprintf "'%s' is a valid file path" input)
+                tailCoordinator <! StartTail(input, consoleWriter)
+            | IsInvalidPath ->
+                consoleWriter <! WriteError(sprintf "'%s' is not a valid file path" input)
+                context.Sender() <! ReadInput
 
-            ignored()
+        ignored()
 
-    let consoleReader (inputValidator: IActorRef<InputValidatorMessage>) (context: Actor<ConsoleReaderMessage>) =
-        fun (message: ConsoleReaderMessage) ->
-            match message with
-            | ReadInput ->
-                writeLine "Enter the path to a file to begin tailing:"
+    let consoleReader (inputValidator: IActorRef<InputValidatorMessage>) (context: Actor<_>) (message) =
+        match message with
+        | ReadInput ->
+            let input = readLine()
 
-                let input = readLine()
+            writeLine String.Empty
 
-                match input with
-                | IsExit -> 
-                    context.System.Terminate() |> ignore
-                | IsContent ->
-                    inputValidator <! ValidateInput input
+            match input with
+            | IsExit -> 
+                context.System.Terminate() |> ignore
+            | IsContent ->
+                inputValidator <! ValidateInput input
 
-            ignored ()
+        ignored ()

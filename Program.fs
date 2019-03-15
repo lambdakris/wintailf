@@ -42,6 +42,9 @@ let main argv =
         |> props 
         |> spawn winTailSystem "ConsoleReader"
 
+
+    Console.WriteLine "Enter the path to the file you want to tail:"
+    
     consoleReaderRef <! Messages.ReadInput
 
     winTailSystem.WhenTerminated.Wait()    
