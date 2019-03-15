@@ -31,13 +31,13 @@ let main argv =
         spawn winTailSystem "TailCoordinator" props
 
     let inputValidatorRef =
-        Actors.inputValidator consoleWriterRef tailCoordinatorRef
+        Actors.inputValidator consoleWriterRef
         |> actorOf2
         |> props
         |> spawn winTailSystem "InputValidator"    
 
     let consoleReaderRef = 
-        Actors.consoleReader inputValidatorRef
+        Actors.consoleReader
         |> actorOf2 
         |> props 
         |> spawn winTailSystem "ConsoleReader"

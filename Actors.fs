@@ -114,20 +114,24 @@ module Actors =
 
         ignored()
 
-    let inputValidator (consoleWriter: IActorRef<ConsoleWriterMessage>) (tailCoordinator: IActorRef<TailCoordinatorMessage>) (context: Actor<_>) (message) =
+    let inputValidator (consoleWriter: IActorRef<ConsoleWriterMessage>) (context: Actor<_>) (message) =
         match message with
         | ValidateInput input ->
             match input with
             | IsValidPath -> 
                 consoleWriter <! WriteInfo(sprintf "'%s' is a valid file path" input)
+
+                let tailCoordinator = select context "/user/TailCoordinator"
                 tailCoordinator <! StartTail(input, consoleWriter)
             | IsInvalidPath ->
                 consoleWriter <! WriteError(sprintf "'%s' is not a valid file path" input)
-                context.Sender() <! ReadInput
+
+                let consoleReader = context.Sender() 
+                consoleReader <! ReadInput
 
         ignored()
 
-    let consoleReader (inputValidator: IActorRef<InputValidatorMessage>) (context: Actor<_>) (message) =
+    let consoleReader (context: Actor<_>) (message) =
         match message with
         | ReadInput ->
             let input = readLine()
@@ -138,6 +142,7 @@ module Actors =
             | IsExit -> 
                 context.System.Terminate() |> ignore
             | IsContent ->
+                let inputValidator = select context "/user/InputValidator"
                 inputValidator <! ValidateInput input
 
         ignored ()
