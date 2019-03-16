@@ -1,14 +1,19 @@
-﻿module Program
+﻿module WinTail.Program
 
 open System
-open Akkling
+open System.Threading.Tasks
+open Microsoft.Extensions.Hosting
+open Microsoft.Extensions.DependencyInjection
 open Akka.Actor
-open Actors
+open Akkling
 
-[<EntryPoint>]
-let main argv =
+
+open WinTail.Actors
+
+
+type AkkaHostedService() =
     let winTailConfig = Configuration.defaultConfig()
-    use winTailSystem = System.create "WinTailSystem" winTailConfig
+    let winTailSystem = System.create "WinTailSystem" winTailConfig
 
     let consoleWriterRef = 
         Actors.consoleWriter
@@ -42,11 +47,35 @@ let main argv =
         |> props 
         |> spawn winTailSystem "ConsoleReader"
 
+    interface IHostedService with
+        member this.StartAsync(cancellation) =
+            Console.WriteLine "Enter the path to the file you want to tail:"
+            
+            consoleReaderRef <! Messages.ReadInput
 
-    Console.WriteLine "Enter the path to the file you want to tail:"
-    
-    consoleReaderRef <! Messages.ReadInput
+            Task.CompletedTask
 
-    winTailSystem.WhenTerminated.Wait()    
-        
+        member this.StopAsync(cancellation) =
+            winTailSystem.Terminate()
+
+    interface IDisposable with
+        member this.Dispose() =
+            winTailSystem.Dispose()
+
+
+[<EntryPoint>]
+let main args =
+    HostBuilder()
+        .ConfigureServices(fun collection ->
+            collection
+                .Configure<ConsoleLifetimeOptions>(fun options ->
+                    options.SuppressStatusMessages <- true
+                )
+                .AddHostedService<AkkaHostedService>()
+                |> ignore
+        )
+        .UseConsoleLifetime()
+        .Build()
+        .Run()
+
     0 // return an integer exit code

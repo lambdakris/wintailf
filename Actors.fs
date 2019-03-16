@@ -1,4 +1,4 @@
-module Actors
+module WinTail.Actors
 
 open System
 open System.IO
@@ -7,8 +7,11 @@ open Akka.Actor
 
 
 module Helpers =
-    let (|IsExit|IsContent|) (input: String) =
-        if input.ToLower() = "exit" then IsExit else IsContent
+    let (|IsNull|IsExit|IsContent|) (input: String) =
+        match input with
+        | null -> IsNull
+        | s when s.ToLower() = "exit" -> IsExit
+        | _ -> IsContent
 
     let (|IsValidPath|IsInvalidPath|) (content: String) =
         if File.Exists content then IsValidPath else IsInvalidPath
@@ -139,6 +142,8 @@ module Actors =
             writeLine String.Empty
 
             match input with
+            | IsNull ->
+                ()
             | IsExit -> 
                 context.System.Terminate() |> ignore
             | IsContent ->
